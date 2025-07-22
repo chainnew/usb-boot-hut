@@ -1,0 +1,94 @@
+[package]
+name = "usb-boot-hut"
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name <your.email@example.com>"]
+description = "Secure USB bootable drive manager with LUKS encryption"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/yourusername/usb-boot-hut"
+readme = "README.md"
+keywords = ["usb", "boot", "grub", "encryption", "luks"]
+categories = ["command-line-utilities", "filesystem"]
+
+[dependencies]
+# CLI and user interface
+clap = { version = "4.5", features = ["derive", "env"] }
+indicatif = "0.17"
+dialoguer = "0.11"
+colored = "2.1"
+console = "0.15"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+
+# Date/time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Regex
+regex = "1.10"
+
+# File system and paths
+walkdir = "2.5"
+dirs = "5.0"
+tempfile = "3.10"
+which = "6.0"
+
+# Security and crypto
+zeroize = { version = "1.7", features = ["derive"] }
+secrecy = "0.8"
+sha2 = "0.10"
+hex = "0.4"
+
+# System interaction
+nix = { version = "0.29", features = ["fs", "mount"] }
+libc = "0.2"
+uuid = { version = "1.8", features = ["v4", "serde"] }
+
+# Async runtime (for progress tracking)
+tokio = { version = "1.40", features = ["full"] }
+
+# Platform-specific
+[target.'cfg(target_os = "linux")'.dependencies]
+procfs = "0.16"
+blkid = "0.2"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.58", features = ["Win32_Storage_FileSystem", "Win32_System_WindowsProgramming", "Win32_Security"] }
+winapi = { version = "0.3", features = ["fileapi", "handleapi", "winioctl", "winnt"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+core-foundation = "0.9"
+io-kit = "0.1"
+
+# Optional features
+[features]
+default = ["encryption"]
+encryption = []
+gui = ["eframe"]
+
+[dependencies.eframe]
+version = "0.28"
+optional = true
+
+[dev-dependencies]
+assert_cmd = "2.0"
+predicates = "3.1"
+mockall = "0.13"
+tempfile = "3.10"
+serial_test = "3.1"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+opt-level = 3
+
+[[bin]]
+name = "usb-boot-hut"
+path = "src/main.rs"
