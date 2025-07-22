@@ -3,7 +3,7 @@ use crate::cli::WipePattern;
 use std::fs::{File, OpenOptions};
 use std::io::{Write, Seek, SeekFrom, Read};
 use std::path::Path;
-use colored::*;
+// use colored::*; // Not needed currently
 
 pub struct SecureWipe<'a> {
     device_path: &'a Path,
@@ -231,7 +231,7 @@ impl<'a> SecureWipe<'a> {
         Ok(())
     }
     
-    fn wipe_with_zeros<F>(&self, mut progress_callback: F) -> Result<()>
+    fn wipe_with_zeros<F>(&self, progress_callback: F) -> Result<()>
     where
         F: FnMut(u8),
     {

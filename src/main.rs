@@ -49,7 +49,9 @@ fn needs_root(cli: &Cli) -> bool {
         Commands::Add { .. } |
         Commands::Remove { .. } |
         Commands::Clean { .. } |
-        Commands::UpdateGrub { .. } => true,
+        Commands::UpdateGrub { .. } |
+        Commands::Nuke { .. } |
+        Commands::Burn { .. } => true,
         
         Commands::List { .. } |
         Commands::Devices { .. } |

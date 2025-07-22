@@ -4043,6 +4043,7 @@ dependencies = [
  "dirs",
  "eframe",
  "env_logger",
+ "flate2",
  "hex",
  "indicatif",
  "libc",

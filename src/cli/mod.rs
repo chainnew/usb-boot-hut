@@ -163,8 +163,8 @@ pub enum Commands {
         #[arg(short, long, default_value = "1")]
         passes: u8,
         
-        /// Wipe pattern: random, zeros, dod (DoD 5220.22-M)
-        #[arg(short = 'p', long, default_value = "random")]
+        /// Wipe pattern: random, zeros, dod (DoD 5220.22-M), gutmann
+        #[arg(short = 'w', long, default_value = "random")]
         pattern: WipePattern,
         
         /// Skip ALL safety checks and confirmations (VERY DANGEROUS!)

@@ -45,6 +45,9 @@ secrecy = "0.8"
 sha2 = "0.10"
 hex = "0.4"
 
+# Compression
+flate2 = "1.0"
+
 # System interaction
 nix = { version = "0.29", features = ["fs", "mount"] }
 libc = "0.2"

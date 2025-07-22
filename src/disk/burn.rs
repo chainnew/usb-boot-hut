@@ -1,7 +1,7 @@
 use crate::{Result, UsbBootHutError};
 use std::path::{Path, PathBuf};
 use std::fs::{File, OpenOptions};
-use std::io::{Read, Write, Seek, SeekFrom, BufReader, BufWriter};
+use std::io::{Read, Write, Seek, SeekFrom};
 use indicatif::{ProgressBar, ProgressStyle};
 use flate2::read::GzDecoder;
 

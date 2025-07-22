@@ -1,6 +1,6 @@
 use crate::{Result, UsbBootHutError};
 use crate::cli::{Cli, Commands, ConfigAction, ListFormat, WipePattern};
-use crate::disk::{enumerate_usb_devices, DriveManager};
+use crate::disk::enumerate_usb_devices;
 use crate::cleanup::{CleanupEngine, CleanupConfig};
 use crate::config::ConfigManager;
 use crate::utils::print_banner;
@@ -133,7 +133,7 @@ fn handle_format(device_path: &Path, encrypt: bool, secure_wipe: bool, skip_conf
     }
     
     // Get passphrase if encryption is enabled
-    let passphrase = if encrypt {
+    let _passphrase = if encrypt {
         println!("\n{}", "🔐 Encryption Setup".green().bold());
         println!("Enter a strong passphrase for LUKS encryption.");
         println!("Requirements: 12+ chars, mixed case, numbers or symbols");
@@ -166,6 +166,7 @@ fn handle_format(device_path: &Path, encrypt: bool, secure_wipe: bool, skip_conf
     #[cfg(target_os = "linux")]
     {
         // Create drive manager
+        use crate::disk::DriveManager;
         let mut manager = DriveManager::new(device);
         if encrypt {
             manager = manager.with_encryption();
@@ -175,9 +176,9 @@ fn handle_format(device_path: &Path, encrypt: bool, secure_wipe: bool, skip_conf
         println!("\n{}", "🚀 Starting format process...".cyan().bold());
         
         if secure_wipe {
-            manager.secure_format(passphrase.as_deref())?;
+            manager.secure_format(_passphrase.as_deref())?;
         } else {
-            manager.format_and_setup(passphrase.as_deref())?;
+            manager.format_and_setup(_passphrase.as_deref())?;
         }
         
         println!("\n{}", "✅ USB drive successfully formatted!".green().bold());
@@ -185,9 +186,9 @@ fn handle_format(device_path: &Path, encrypt: bool, secure_wipe: bool, skip_conf
         println!("  1. Mount the drive: {}", format!("usb-boot-hut unlock {}", device_path.display()).cyan());
         println!("  2. Add ISOs: {}", "usb-boot-hut add <iso-file>".cyan());
         println!("  3. Safely eject and boot from the USB drive");
+        
+        Ok(())
     }
-    
-    Ok(())
 }
 
 fn handle_unlock(device_path: &Path, mount_point: Option<&Path>) -> Result<()> {
@@ -400,7 +401,7 @@ fn handle_update_grub(device_path: &Path, regenerate: bool) -> Result<()> {
 
 fn handle_nuke(device_path: &Path, passes: u8, pattern: WipePattern, force: bool, verify: bool) -> Result<()> {
     use crate::disk::SecureWipe;
-    use crate::utils::AnimationPlayer;
+    
     use indicatif::{ProgressBar, ProgressStyle};
     
     // Find the device
@@ -562,7 +563,7 @@ fn handle_nuke(device_path: &Path, passes: u8, pattern: WipePattern, force: bool
             }
         }
         
-        pb.set_prefix(message);
+        pb.set_prefix(message.to_string());
     })?;
     
     pb.finish_with_message("COMPLETE");
@@ -583,4 +584,168 @@ fn handle_nuke(device_path: &Path, passes: u8, pattern: WipePattern, force: bool
     println!("The device has been securely wiped and is ready for disposal or reuse.");
     
     Ok(())
+}
+
+fn handle_burn(image_path: &Path, device_path: &Path, no_verify: bool, enable_ssh: bool, wifi: Option<&str>, skip_confirm: bool, eject: bool) -> Result<()> {
+    use crate::disk::{ImageBurner, configure_raspberry_pi};
+    
+    // Validate image file
+    if !image_path.exists() {
+        return Err(UsbBootHutError::Device(
+            format!("Image file not found: {}", image_path.display())
+        ));
+    }
+    
+    let image_ext = image_path.extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("");
+        
+    if !["img", "gz", "xz"].contains(&image_ext) {
+        return Err(UsbBootHutError::Device(
+            "Unsupported image format. Use .img, .img.gz, or .img.xz".to_string()
+        ));
+    }
+    
+    // Find the device
+    let devices = enumerate_usb_devices()?;
+    let device = devices.into_iter()
+        .find(|d| d.path == device_path)
+        .ok_or_else(|| UsbBootHutError::Device(format!("Device not found: {}", device_path.display())))?;
+    
+    // Show burn info
+    println!("\n{}", "🔥 Raspberry Pi Image Burner 🔥".magenta().bold());
+    println!("\n{}", "Image Information:".bold());
+    println!("  File:     {}", image_path.display());
+    println!("  Size:     {}", format_file_size(std::fs::metadata(image_path)?.len()));
+    
+    println!("\n{}", "Target Device:".bold());
+    println!("  Path:     {}", device.path.display());
+    println!("  Model:    {} {}", device.vendor, device.model);
+    println!("  Size:     {} GB", device.size / 1_000_000_000);
+    println!("  Type:     {}", if device.removable { "Removable" } else { "Fixed" }.red());
+    
+    // Show options
+    if enable_ssh || wifi.is_some() {
+        println!("\n{}", "Configuration Options:".bold());
+        if enable_ssh {
+            println!("  • SSH will be enabled");
+        }
+        if let Some(wifi_config) = wifi {
+            if let Some(ssid) = wifi_config.split(':').next() {
+                println!("  • WiFi will be configured for: {}", ssid);
+            }
+        }
+    }
+    
+    // Validate removable
+    if !device.removable {
+        return Err(UsbBootHutError::Device(
+            "Cannot burn to non-removable device".to_string()
+        ));
+    }
+    
+    // Confirm
+    if !skip_confirm {
+        println!("\n{}", "⚠️  WARNING: All data on the device will be overwritten!".red().bold());
+        if !Confirm::new()
+            .with_prompt(format!("Burn {} to {}?", image_path.display(), device_path.display()))
+            .default(false)
+            .interact()
+            .map_err(|e| UsbBootHutError::Dialog(e.to_string()))?
+        {
+            println!("Operation cancelled.");
+            return Ok(());
+        }
+    }
+    
+    // Unmount on macOS
+    #[cfg(target_os = "macos")]
+    {
+        println!("\nUnmounting device...");
+        let output = std::process::Command::new("diskutil")
+            .args(["unmountDisk", device_path.to_str().unwrap()])
+            .output()
+            .map_err(|e| UsbBootHutError::Device(format!("Failed to unmount: {}", e)))?;
+            
+        if !output.status.success() {
+            println!("Warning: Failed to unmount device");
+        }
+    }
+    
+    // Burn the image
+    println!("\n{}", "🚀 Burning image...".cyan().bold());
+    let burner = ImageBurner::new(image_path, device_path);
+    burner.burn()?;
+    
+    // Verify if requested
+    if !no_verify {
+        println!("\n{}", "🔍 Verifying burned image...".cyan());
+        let verified = burner.verify()?;
+        if verified {
+            println!("{}", "✅ Verification passed!".green());
+        } else {
+            return Err(UsbBootHutError::Device(
+                "Verification failed! The image may not have been written correctly.".to_string()
+            ));
+        }
+    }
+    
+    // Configure Raspberry Pi specific features
+    if enable_ssh || wifi.is_some() {
+        println!("\n{}", "⚙️  Configuring Raspberry Pi...".cyan());
+        
+        let wifi_config = if let Some(wifi_str) = wifi {
+            let parts: Vec<&str> = wifi_str.split(':').collect();
+            if parts.len() != 2 {
+                return Err(UsbBootHutError::Device(
+                    "WiFi config must be in format: SSID:password".to_string()
+                ));
+            }
+            Some((parts[0], parts[1]))
+        } else {
+            None
+        };
+        
+        configure_raspberry_pi(device_path, enable_ssh, wifi_config)?;
+    }
+    
+    // Eject if requested
+    if eject {
+        #[cfg(target_os = "macos")]
+        {
+            println!("\nEjecting device...");
+            let output = std::process::Command::new("diskutil")
+                .args(["eject", device_path.to_str().unwrap()])
+                .output()
+                .map_err(|e| UsbBootHutError::Device(format!("Failed to eject: {}", e)))?;
+                
+            if output.status.success() {
+                println!("{}", "✅ Device ejected safely".green());
+            } else {
+                println!("Warning: Failed to eject device");
+            }
+        }
+    }
+    
+    println!("\n{}", "🎉 Image burned successfully!".green().bold());
+    println!("Your SD card/USB is ready to boot in a Raspberry Pi!");
+    
+    Ok(())
+}
+
+fn format_file_size(bytes: u64) -> String {
+    const UNITS: &[&str] = &["B", "KB", "MB", "GB", "TB"];
+    let mut size = bytes as f64;
+    let mut unit_idx = 0;
+    
+    while size >= 1024.0 && unit_idx < UNITS.len() - 1 {
+        size /= 1024.0;
+        unit_idx += 1;
+    }
+    
+    if unit_idx == 0 {
+        format!("{} {}", size as u64, UNITS[unit_idx])
+    } else {
+        format!("{:.2} {}", size, UNITS[unit_idx])
+    }
 }

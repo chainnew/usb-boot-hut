@@ -1,1 +1,49 @@
+# Rust build artifacts
 /target
+Cargo.lock
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ISO and disk images
+*.iso
+*.img
+*.img.gz
+*.img.xz
+*.dmg
+*.vhd
+*.vhdx
+*.vmdk
+*.qcow2
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+*.bak
+*.cache
+
+# Test data
+/test-data/
+/test-images/
+
+# Configuration files with sensitive data
+config.toml.local
+*.key
+*.pem
+*.cert
+
+# Debug output
+*.dump
+core
+core.*
+
+# Operating system files
+Thumbs.db
+.Spotlight-V100
+.Trashes
