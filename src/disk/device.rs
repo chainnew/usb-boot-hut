@@ -1,5 +1,5 @@
 use crate::{Result, UsbBootHutError};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -198,12 +198,163 @@ pub fn enumerate_usb_devices() -> Result<Vec<UsbDevice>> {
 pub fn enumerate_usb_devices() -> Result<Vec<UsbDevice>> {
     use std::process::Command;
     
+    // Use diskutil to list all disks
     let output = Command::new("diskutil")
-        .args(["list", "-plist"])
+        .args(["list"])
         .output()
         .map_err(|e| UsbBootHutError::Device(format!("Failed to run diskutil: {}", e)))?;
         
-    // Parse diskutil plist output
-    // Implementation details...
-    todo!("macOS USB enumeration")
+    if !output.status.success() {
+        return Err(UsbBootHutError::Device(
+            "Failed to list disks".to_string()
+        ));
+    }
+    
+    let output_str = String::from_utf8_lossy(&output.stdout);
+    let mut devices = Vec::new();
+    
+    // Parse diskutil output to find external disks
+    for line in output_str.lines() {
+        if line.starts_with("/dev/disk") && line.contains("external") {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if let Some(device_path) = parts.first() {
+                // Get detailed info about this disk
+                if let Ok(device) = get_macos_device_info(device_path) {
+                    devices.push(device);
+                }
+            }
+        }
+    }
+    
+    Ok(devices)
+}
+
+#[cfg(target_os = "macos")]
+fn get_macos_device_info(device_path: &str) -> Result<UsbDevice> {
+    use std::process::Command;
+    
+    // Get device info using diskutil
+    let output = Command::new("diskutil")
+        .args(["info", device_path])
+        .output()
+        .map_err(|e| UsbBootHutError::Device(format!("Failed to get device info: {}", e)))?;
+        
+    if !output.status.success() {
+        return Err(UsbBootHutError::Device(
+            format!("Failed to get info for {}", device_path)
+        ));
+    }
+    
+    let info = String::from_utf8_lossy(&output.stdout);
+    let mut size = 0u64;
+    let mut removable = false;
+    let mut model = "Unknown".to_string();
+    let mut vendor = "Unknown".to_string();
+    
+    // Parse the diskutil info output
+    for line in info.lines() {
+        let line = line.trim();
+        if line.starts_with("Disk Size:") {
+            // Extract size in bytes
+            if let Some(size_str) = line.split('(').nth(1) {
+                if let Some(bytes_str) = size_str.split(" Bytes").next() {
+                    size = bytes_str.trim().parse().unwrap_or(0);
+                }
+            }
+        } else if line.starts_with("Removable Media:") {
+            removable = line.contains("Yes") || line.contains("Removable");
+        } else if line.starts_with("Device / Media Name:") {
+            model = line.split(':').nth(1).unwrap_or("").trim().to_string();
+        } else if line.starts_with("Protocol:") {
+            let protocol = line.split(':').nth(1).unwrap_or("").trim();
+            if protocol.contains("USB") {
+                vendor = "USB Device".to_string();
+            }
+        }
+    }
+    
+    // Get partitions
+    let partitions = enumerate_macos_partitions(device_path)?;
+    
+    Ok(UsbDevice {
+        path: PathBuf::from(device_path),
+        name: device_path.trim_start_matches("/dev/").to_string(),
+        size,
+        model,
+        vendor,
+        removable,
+        partitions,
+    })
+}
+
+#[cfg(target_os = "macos")]
+fn enumerate_macos_partitions(device_path: &str) -> Result<Vec<Partition>> {
+    use std::process::Command;
+    
+    let output = Command::new("diskutil")
+        .args(["list", device_path])
+        .output()
+        .map_err(|e| UsbBootHutError::Device(format!("Failed to list partitions: {}", e)))?;
+        
+    if !output.status.success() {
+        return Ok(Vec::new()); // Device might not have partitions
+    }
+    
+    let output_str = String::from_utf8_lossy(&output.stdout);
+    let mut partitions = Vec::new();
+    let mut in_partition_section = false;
+    
+    for line in output_str.lines() {
+        let line = line.trim();
+        
+        // Look for the partition table section
+        if line.contains("IDENTIFIER") {
+            in_partition_section = true;
+            continue;
+        }
+        
+        if in_partition_section && !line.is_empty() {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() >= 4 {
+                // Format: #: TYPE NAME SIZE IDENTIFIER
+                if let Ok(number) = parts[0].trim_end_matches(':').parse::<u32>() {
+                    let filesystem = parts[1].to_string();
+                    let identifier = parts.last().unwrap();
+                    
+                    // Parse size
+                    let size_str = parts[parts.len() - 2];
+                    let size = parse_size_string(size_str).unwrap_or(0);
+                    
+                    partitions.push(Partition {
+                        path: PathBuf::from(format!("/dev/{}", identifier)),
+                        number,
+                        size,
+                        filesystem: Some(filesystem),
+                        label: None,
+                        uuid: None,
+                    });
+                }
+            }
+        }
+    }
+    
+    Ok(partitions)
+}
+
+#[cfg(target_os = "macos")]
+fn parse_size_string(size_str: &str) -> Option<u64> {
+    let size_str = size_str.trim();
+    
+    if size_str.ends_with("GB") {
+        let num = size_str.trim_end_matches("GB").parse::<f64>().ok()?;
+        Some((num * 1_000_000_000.0) as u64)
+    } else if size_str.ends_with("MB") {
+        let num = size_str.trim_end_matches("MB").parse::<f64>().ok()?;
+        Some((num * 1_000_000.0) as u64)
+    } else if size_str.ends_with("KB") {
+        let num = size_str.trim_end_matches("KB").parse::<f64>().ok()?;
+        Some((num * 1_000.0) as u64)
+    } else {
+        None
+    }
 }

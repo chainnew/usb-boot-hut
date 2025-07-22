@@ -44,7 +44,7 @@ impl IsoValidator {
             
         Ok(IsoInfo {
             path: iso_path.to_path_buf(),
-            volume_id,
+            volume_id: volume_id.clone(),
             size,
             bootable,
             iso_type: Self::detect_iso_type(&volume_id),
@@ -127,7 +127,7 @@ pub struct IsoInfo {
     pub iso_type: IsoType,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum IsoType {
     Ubuntu,
     Debian,

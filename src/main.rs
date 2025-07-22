@@ -38,6 +38,7 @@ fn is_root() -> bool {
     false
 }
 
+#[allow(dead_code)]
 fn needs_root(cli: &Cli) -> bool {
     use usb_boot_hut::cli::Commands;
     

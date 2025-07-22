@@ -36,6 +36,9 @@ pub enum UsbBootHutError {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
     
+    #[error("Dialog error: {0}")]
+    Dialog(String),
+    
     #[error("Platform not supported: {0}")]
     UnsupportedPlatform(String),
 }

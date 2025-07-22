@@ -159,7 +159,7 @@ menuentry "Shutdown" {
         let mut theme_file = File::create(&theme_path)
             .map_err(|e| UsbBootHutError::Bootloader(format!("Failed to create theme: {}", e)))?;
             
-        let theme_config = r#"# USB Boot Hut GRUB Theme
+        let theme_config = r###"# USB Boot Hut GRUB Theme
 title-text: "USB Boot Hut"
 title-color: "#FFFFFF"
 title-font: "DejaVu Sans Regular 24"
@@ -206,7 +206,7 @@ terminal-box: "terminal_box_*.png"
     font = "DejaVu Sans Regular 14"
     color = "#AAAAAA"
 }
-"#;
+"###;
         
         theme_file.write_all(theme_config.as_bytes())
             .map_err(|e| UsbBootHutError::Bootloader(format!("Failed to write theme: {}", e)))?;
@@ -267,7 +267,7 @@ impl GrubConfigManager {
         
         // Generate menu entry based on ISO type
         let entry = match boot_params {
-            BootParams::Ubuntu { version } => {
+            BootParams::Ubuntu { version: _ } => {
                 format!(r#"
 menuentry "{}" {{
     set isofile="{}"
@@ -277,7 +277,7 @@ menuentry "{}" {{
 }}
 "#, iso_name, iso_path)
             },
-            BootParams::Debian { version } => {
+            BootParams::Debian { version: _ } => {
                 format!(r#"
 menuentry "{}" {{
     set isofile="{}"
@@ -297,7 +297,7 @@ menuentry "{}" {{
 }}
 "#, iso_name, iso_path)
             },
-            BootParams::Windows { version } => {
+            BootParams::Windows { version: _ } => {
                 // Windows requires chainloading
                 format!(r#"
 menuentry "{}" {{

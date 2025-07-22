@@ -24,7 +24,7 @@ pub struct CleanupRule {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type")]
+#[serde(tag = "type", rename_all = "PascalCase")]
 pub enum Pattern {
     Extension { ext: String },
     ExactName { name: String },

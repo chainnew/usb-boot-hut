@@ -39,7 +39,7 @@ impl DriveManager {
         println!("Size: {} GB", self.device.size / 1_000_000_000);
         
         // Create partition manager
-        let mut partition_mgr = PartitionManager::new(&self.device.path);
+        let partition_mgr = PartitionManager::new(&self.device.path);
         
         // Step 1: Wipe partition table
         println!("\n[1/6] Wiping partition table...");

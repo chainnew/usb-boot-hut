@@ -153,6 +153,57 @@ pub enum Commands {
         #[arg(long)]
         regenerate: bool,
     },
+    
+    /// Securely wipe a USB drive (DANGEROUS!)
+    Nuke {
+        /// Device path to nuke
+        device: PathBuf,
+        
+        /// Number of passes (default: 1)
+        #[arg(short, long, default_value = "1")]
+        passes: u8,
+        
+        /// Wipe pattern: random, zeros, dod (DoD 5220.22-M)
+        #[arg(short = 'p', long, default_value = "random")]
+        pattern: WipePattern,
+        
+        /// Skip ALL safety checks and confirmations (VERY DANGEROUS!)
+        #[arg(long)]
+        force: bool,
+        
+        /// Verify wipe after completion
+        #[arg(long)]
+        verify: bool,
+    },
+    
+    /// Burn a Raspberry Pi or other disk image to SD card/USB
+    Burn {
+        /// Image file to burn (.img, .img.gz, .img.xz)
+        image: PathBuf,
+        
+        /// Target device
+        device: PathBuf,
+        
+        /// Skip verification after burning
+        #[arg(long)]
+        no_verify: bool,
+        
+        /// Enable SSH by creating ssh file in boot partition
+        #[arg(long)]
+        enable_ssh: bool,
+        
+        /// Set WiFi credentials (format: "SSID:password")
+        #[arg(long)]
+        wifi: Option<String>,
+        
+        /// Skip confirmation prompts
+        #[arg(short = 'y', long)]
+        yes: bool,
+        
+        /// Eject device after burning
+        #[arg(long)]
+        eject: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -189,4 +240,16 @@ pub enum ListFormat {
     Json,
     Csv,
     Simple,
+}
+
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+pub enum WipePattern {
+    /// Random data (most secure)
+    Random,
+    /// All zeros (fast)
+    Zeros,
+    /// DoD 5220.22-M standard (3 passes)
+    Dod,
+    /// Gutmann method (35 passes, paranoid level)
+    Gutmann,
 }

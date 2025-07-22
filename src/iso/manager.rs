@@ -1,10 +1,10 @@
 use crate::{Result, UsbBootHutError};
 use crate::iso::{IsoValidator, IsoInfo, IsoMetadata, MetadataStore, IsoCategory};
 use crate::bootloader::{GrubConfigManager, BootParams};
-use crate::utils::{AnimationPlayer, with_progress};
+use crate::utils::with_progress;
 use std::path::{Path, PathBuf};
 use std::fs::{self, File};
-use std::io::{self, Read, Write};
+use std::io::{Read, Write};
 use indicatif::ProgressBar;
 
 pub struct IsoManager {

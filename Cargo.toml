@@ -64,7 +64,7 @@ winapi = { version = "0.3", features = ["fileapi", "handleapi", "winioctl", "win
 
 [target.'cfg(target_os = "macos")'.dependencies]
 core-foundation = "0.9"
-io-kit = "0.1"
+# io-kit support will be added later
 
 # Table formatting
 prettytable-rs = "0.10"
